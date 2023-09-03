@@ -1,0 +1,374 @@
+<html>
+	<head>
+		<style>
+			body{
+				background: blue;
+				text-align: center;
+				color: white;
+				font-family: sans-serif;
+			}
+			
+			#canvas{
+				border: 10px solid lightblue;
+			}
+
+			@keyframes colors {
+				from{border: 10px solid lightblue;}
+				to{border: 10px solid navy;}
+			}
+			
+			#canvas:focus{
+				outline-style: none;
+				border: 10px solid lightblue;
+				animation-name: colors;
+				animation-duration: 2s;
+				animation-iteration-count: infinite;
+			}
+			
+		</style>
+	</head>
+	<body>
+		<h1>GAMES</h1>
+		<canvas id="canvas" width=300 height=300 tabindex=0></canvas>
+		<script>
+			var canvas = document.getElementById("canvas");
+			var ctx = canvas.getContext("2d");
+			ctx.fillStyle = "black";
+			ctx.fillRect(0, 0, canvas.width, canvas.height);
+			canvas.addEventListener("keydown", function(e){ get_input(e); });
+			canvas.addEventListener("keyup", function(e){ get_input(e); });
+			canvas.focus();
+			
+			var GAME_STATE = "INIT";
+			var VOLLEY_COUNT = 0;
+			
+			const PADDLE_W = 20;
+			const PADDLE_H = PADDLE_W * 3;
+			const PADDLE_START_Y = (canvas.height / 2) - (PADDLE_H / 2);
+			const PADDLE_EDGE_GAP = 10;
+			const PADDLE_SPEED = 10;
+			const PADDLE_COLOR = "white";
+			
+			const BALL_W = 10;
+			const BALL_H = 10;
+			const BALL_START_X = (canvas.width / 2) - (BALL_W /2);
+			const BALL_START_Y = (canvas.height / 2) - (BALL_H / 2);
+			const BALL_COLOR = "white";
+			
+			const SCORE_SZ = 36;
+			const SCORE_COLOR = "lightblue";
+			const L_SCORE_X = canvas.width / 4;
+			const R_SCORE_X = ((canvas.width / 4) * 3) - SCORE_SZ / 2;
+			const SCORE_Y = canvas.height / 4;
+
+			
+			var R_PADDLE_X = 0;
+			var R_PADDLE_Y = 0;
+			var R_PADDLE_BOTTOM = 0;
+			var R_PADDLE_SEGMENT_1 = [];
+			var R_PADDLE_SEGMENT_2 = [];
+			var R_PADDLE_SEGMENT_3 = [];
+			var R_PADDLE_MOVING_UP = false;
+			var R_PADDLE_MOVING_DOWN = false;
+			var R_PADDLE_START_X = canvas.width - (PADDLE_W + PADDLE_EDGE_GAP);
+			var R_PADDLE_SCORE = 0;
+			
+			
+			var L_PADDLE_X = 0;
+			var L_PADDLE_Y = 0;
+			var L_PADDLE_FRONT = 0;
+			var L_PADDLE_BOTTOM = 0;
+			var L_PADDLE_SEGMENT_1 = [];
+			var L_PADDLE_SEGMENT_2 = [];
+			var L_PADDLE_SEGMENT_3 = [];
+			var L_PADDLE_START_X = PADDLE_EDGE_GAP;
+			var L_PADDLE_SCORE = 0;
+			var L_PADDLE_MOVING_UP = false;
+			var L_PADDLE_MOVING_DOWN = false;
+			
+			var BALL_X = 0;
+			var BALL_Y = 0;
+			var BALL_SPEED_X = 0;
+			var BALL_SPEED_Y = 0;
+			var BALL_FRONT = 0;	// when travelling right
+			var BALL_BOTTOM = 0;
+			
+			function get_input(event)
+			{
+				if(event.type == "keydown")
+				{
+					switch(event.key)
+					{
+						case 'w':
+							L_PADDLE_MOVING_UP = true;
+							break;
+						case 's':
+							L_PADDLE_MOVING_DOWN = true;
+							break;
+						case 'ArrowUp':
+							R_PADDLE_MOVING_UP = true;
+							break;
+						case 'ArrowDown':
+							R_PADDLE_MOVING_DOWN = true;
+							break;
+						case ' ':
+							if(GAME_STATE == "HOLD")
+							{
+								GAME_STATE = "RUN"
+							}else if(GAME_STATE == "RUN")
+							{
+								GAME_STATE = "HOLD";
+							}
+					}
+				}else if(event.type == "keyup")
+				{
+					switch(event.key)
+					{
+						case 'w':
+							L_PADDLE_MOVING_UP = false;
+							break;
+						case 's':
+							L_PADDLE_MOVING_DOWN = false;
+							break;
+						case 'ArrowUp':
+							R_PADDLE_MOVING_UP = false;
+							break;
+						case 'ArrowDown':
+							R_PADDLE_MOVING_DOWN = false;
+							break;
+					}
+				}
+			}
+			
+			function speed_up()
+			{
+				if(VOLLEY_COUNT == 5)
+				{
+					if(BALL_SPEED_X > 0)
+					{
+						BALL_SPEED_X += 2;
+					}else{
+						BALL_SPEED_X -= 2;
+					}
+					VOLLEY_COUNT = 0;
+				}
+			}
+			
+			function collisions()
+			{
+				check_edges();
+				check_paddles();
+			}
+			
+			function check_edges()
+			{
+				if(BALL_FRONT > canvas.width - PADDLE_EDGE_GAP ||
+					BALL_X < PADDLE_EDGE_GAP)
+					{
+						if(BALL_SPEED_X > 0)
+						{
+							L_PADDLE_SCORE++;
+						}else{
+							R_PADDLE_SCORE++;
+						}
+						GAME_STATE = "INIT"; 
+					}
+				if(BALL_Y <= 0)
+				{
+					BALL_SPEED_Y = -BALL_SPEED_Y;
+				}else if(BALL_BOTTOM >= canvas.height)
+				{
+					BALL_SPEED_Y = -BALL_SPEED_Y;
+				}
+			}
+			
+			function re_calc_ball()
+			{
+				BALL_FRONT = BALL_X + BALL_W;
+				BALL_BOTTOM = BALL_Y + BALL_H;
+			}
+			
+			function re_calc_paddles()
+			{
+				let seg_sz = PADDLE_H / 3;
+				
+				R_PADDLE_FRONT = R_PADDLE_X + PADDLE_W;
+				R_PADDLE_BOTTOM = R_PADDLE_Y + PADDLE_H;
+				
+				R_PADDLE_SEGMENT_1 = [R_PADDLE_Y, R_PADDLE_Y + seg_sz - 1];
+				R_PADDLE_SEGMENT_2 = [R_PADDLE_Y + seg_sz, R_PADDLE_Y + (seg_sz * 2) - 1];
+				R_PADDLE_SEGMENT_3 = [R_PADDLE_Y + (seg_sz * 2), R_PADDLE_BOTTOM];
+				
+				L_PADDLE_FRONT = L_PADDLE_X + PADDLE_W;
+				L_PADDLE_BOTTOM = L_PADDLE_Y + PADDLE_H;
+				
+				L_PADDLE_SEGMENT_1 = [L_PADDLE_Y, L_PADDLE_Y + seg_sz - 1];
+				L_PADDLE_SEGMENT_2 = [L_PADDLE_Y + seg_sz, L_PADDLE_Y + (seg_sz * 2) - 1];
+				L_PADDLE_SEGMENT_3 = [L_PADDLE_Y + (seg_sz * 2), L_PADDLE_BOTTOM];
+				
+			}
+			
+			function check_paddles()
+			{
+				// set bounds
+				if(L_PADDLE_Y <= 0)
+				{
+					L_PADDLE_Y = 0;
+					re_calc_paddles();
+				}else if(L_PADDLE_BOTTOM >= canvas.height)
+				{
+					L_PADDLE_Y = canvas.height - PADDLE_H;
+					re_calc_paddles();
+				}
+				
+				if(R_PADDLE_Y <= 0)
+				{
+					R_PADDLE_Y = 0;
+					re_calc_paddles();
+				}else if(R_PADDLE_BOTTOM >= canvas.height)
+				{
+					R_PADDLE_Y = canvas.height - PADDLE_H;
+					re_calc_paddles();
+				}
+				
+				//paddle collisions/bounces
+				if(BALL_X <= L_PADDLE_FRONT &&
+					BALL_BOTTOM > L_PADDLE_Y &&
+					BALL_Y < L_PADDLE_BOTTOM)
+					{
+						
+						if(BALL_BOTTOM >= L_PADDLE_SEGMENT_1[0] &&
+						BALL_BOTTOM < L_PADDLE_SEGMENT_1[1])
+						{
+							BALL_SPEED_Y = -5;
+						}else if(BALL_Y >= L_PADDLE_SEGMENT_2[0] &&
+						BALL_BOTTOM < L_PADDLE_SEGMENT_2[1])
+						{
+							BALL_SPEED_Y = 0;
+						}else if(BALL_Y >= L_PADDLE_SEGMENT_3[0] &&
+						BALL_BOTTOM < L_PADDLE_SEGMENT_3[1])
+						{
+							BALL_SPEED_Y = 5;
+						}
+						VOLLEY_COUNT++;
+						BALL_SPEED_X = -BALL_SPEED_X;
+					}else if(BALL_FRONT >= R_PADDLE_X &&
+						BALL_BOTTOM > R_PADDLE_Y &&
+						BALL_Y < R_PADDLE_BOTTOM)
+					{
+						
+						if(BALL_BOTTOM >= R_PADDLE_SEGMENT_1[0] &&
+						BALL_BOTTOM < R_PADDLE_SEGMENT_1[1])
+						{
+							BALL_SPEED_Y = -5;
+						}else if(BALL_Y >= R_PADDLE_SEGMENT_2[0] &&
+						BALL_BOTTOM < R_PADDLE_SEGMENT_2[1])
+						{
+							BALL_SPEED_Y = 0;
+						}else if(BALL_Y >= R_PADDLE_SEGMENT_3[0] &&
+						BALL_BOTTOM < R_PADDLE_SEGMENT_3[1])
+						{
+							BALL_SPEED_Y = 5;
+						}
+						VOLLEY_COUNT++;
+						BALL_SPEED_X = -BALL_SPEED_X;
+					}
+			}
+			
+			
+			function physics()
+			{
+				if(GAME_STATE == "RUN")
+				{
+					BALL_X += BALL_SPEED_X;
+					BALL_Y += BALL_SPEED_Y;
+					re_calc_ball();
+					
+					if(L_PADDLE_MOVING_UP)
+					{
+						L_PADDLE_Y -= PADDLE_SPEED;
+					}else if(L_PADDLE_MOVING_DOWN)
+					{
+						L_PADDLE_Y += PADDLE_SPEED;
+					}
+					
+					if(R_PADDLE_MOVING_UP)
+					{
+						R_PADDLE_Y -= PADDLE_SPEED;
+						
+					}else if(R_PADDLE_MOVING_DOWN)
+					{
+						R_PADDLE_Y += PADDLE_SPEED;
+					}
+					re_calc_paddles();
+					
+				}
+			}
+			
+			function init_game()
+			{
+				BALL_X = BALL_START_X;
+				BALL_Y = BALL_START_Y;
+				re_calc_ball();
+				
+				if((Math.floor(Math.random() * 100) % 2) == 0)
+				{
+					BALL_SPEED_X = 10;
+				}else{
+					BALL_SPEED_X = -10;
+				}
+				BALL_SPEED_Y = 0;
+				L_PADDLE_X = L_PADDLE_START_X;
+				L_PADDLE_Y = PADDLE_START_Y;
+				R_PADDLE_X = R_PADDLE_START_X;
+				R_PADDLE_Y = PADDLE_START_Y;
+				re_calc_paddles();
+				VOLLEY_COUNT = 0;
+				GAME_STATE = "HOLD";
+			}
+			
+			function draw()
+			{
+				ctx.fillStyle = "black";
+				ctx.fillRect(0, 0, canvas.width, canvas.height);
+				
+				//center line
+				ctx.strokeStyle = "lightblue";
+				ctx.beginPath();
+				ctx.moveTo(canvas.width / 2, 0,);
+				ctx.lineTo(canvas.width / 2, canvas.height);
+				ctx.stroke();
+				
+				// score
+				ctx.fillStyle = SCORE_COLOR;
+				ctx.font = SCORE_SZ + "px Arial";
+				ctx.fillText(L_PADDLE_SCORE, L_SCORE_X, SCORE_Y);
+				ctx.fillText(R_PADDLE_SCORE, R_SCORE_X, SCORE_Y);
+				
+				ctx.fillStyle = BALL_COLOR;
+				ctx.fillRect(BALL_X, BALL_Y, BALL_W, BALL_H);
+				
+				ctx.fillStyle = PADDLE_COLOR;
+				ctx.fillRect(R_PADDLE_X, R_PADDLE_Y, PADDLE_W, PADDLE_H);
+				
+				ctx.fillStyle = PADDLE_COLOR;
+				ctx.fillRect(L_PADDLE_X, L_PADDLE_Y, PADDLE_W, PADDLE_H);
+			}
+			
+			function main()
+			{
+				if(GAME_STATE == "INIT")
+				{
+					init_game();
+				}
+				speed_up();
+				physics();
+				collisions();
+				draw();
+			}
+			
+			setInterval(main, 75);
+			
+		</script>
+	</body>
+</html>
